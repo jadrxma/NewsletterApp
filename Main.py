@@ -1,29 +1,13 @@
-import streamlit as st
-from google.oauth2.service_account import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
-import openai
+import streamlit as st
 
-# OpenAI API Key from Streamlit secrets
-openai.api_key = st.secrets["openai"]["api_key"]
-
-# Gmail API Scopes
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 
-def authenticate_gmail_with_service_account():
-    """Authenticate Gmail API using a service account."""
-    try:
-        credentials = Credentials.from_service_account_info(st.secrets["credentials_file"])
-        service = build('gmail', 'v1', credentials=credentials)
-        st.success("Authenticated using Service Account.")
-        return service
-    except Exception as e:
-        st.error(f"Service Account Authentication failed: {e}")
-        return None
-
 def authenticate_gmail_with_oauth():
-    """Authenticate Gmail API using OAuth for user access."""
+    """Authenticate Gmail API using OAuth."""
     try:
+        # Use the credentials.json file downloaded from Google Cloud Console
         flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
         creds = flow.run_local_server(port=0)
         service = build('gmail', 'v1', credentials=creds)
@@ -51,36 +35,11 @@ def fetch_google_alerts(service, query="subject:Google Alert"):
         st.error(f"Failed to fetch Google Alerts: {e}")
         return []
 
-def summarize_alerts_with_openai(alerts):
-    """Summarize Google Alerts using OpenAI API."""
-    try:
-        combined_alerts = "\n".join(alerts)
-        response = openai.Completion.create(
-            engine="text-davinci-003",
-            prompt=f"Summarize the following Google Alerts and categorize them:\n\n{combined_alerts}",
-            max_tokens=500,
-            temperature=0.7
-        )
-        summary = response.choices[0].text.strip()
-        st.success("Summarization completed.")
-        return summary
-    except Exception as e:
-        st.error(f"Failed to summarize alerts: {e}")
-        return ""
-
-# Streamlit App
 st.title("Google Alerts Summarizer")
-st.write("This app fetches Google Alerts emails and summarizes them using OpenAI.")
+st.write("This app fetches Google Alerts emails and summarizes them.")
 
-# Select Authentication Method
-auth_method = st.selectbox("Choose Authentication Method", ["Service Account", "OAuth"])
-
-if auth_method == "Service Account":
-    service = authenticate_gmail_with_service_account()
-elif auth_method == "OAuth":
-    service = authenticate_gmail_with_oauth()
-else:
-    service = None
+# Authenticate via OAuth
+service = authenticate_gmail_with_oauth()
 
 if service:
     st.subheader("Step 2: Fetch Google Alerts")
@@ -90,9 +49,5 @@ if service:
         alerts = fetch_google_alerts(service, query=query)
         
         if alerts:
-            st.subheader("Step 3: Summarize Alerts")
-            if st.button("Summarize"):
-                summary = summarize_alerts_with_openai(alerts)
-                st.subheader("Summary")
-                st.text_area("Google Alerts Summary", value=summary, height=300)
-
+            st.write("Fetched Alerts:")
+            st.write(alerts)
