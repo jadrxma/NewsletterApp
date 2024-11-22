@@ -4,22 +4,21 @@ from googleapiclient.discovery import build
 import openai
 import logging
 
-# Set up logging for debugging
+# Setup logging for debugging
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # Define Gmail API Scopes
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 
-# Configure OpenAI API Key from Streamlit secrets
+# OpenAI API Key
 openai.api_key = st.secrets["openai"]["api_key"]
 
 def authenticate_gmail_with_oauth():
     """
     Authenticate Gmail API using OAuth for deployed Streamlit app.
-    Includes debugging messages for tracing issues.
+    Includes detailed debugging for tracing errors.
     """
     try:
-        # Initialize OAuth flow
         logging.debug("Initializing OAuth flow")
         flow = Flow.from_client_config(
             {
@@ -33,23 +32,23 @@ def authenticate_gmail_with_oauth():
             },
             scopes=SCOPES
         )
-        
-        # Generate authorization URL
-        logging.debug("Generating authorization URL")
+
+        # Generate an OAuth authorization URL
+        logging.debug("Generating OAuth authorization URL")
         auth_url, _ = flow.authorization_url(prompt='consent')
-        st.write("**Step 1: Authenticate Gmail**")
+        st.write("### Step 1: Authenticate Gmail")
         st.write(f"Click [here]({auth_url}) to log in and authorize the app.")
         st.write("After logging in, copy and paste the authorization code below:")
 
-        # Input field for authorization code
+        # Input field for the authorization code
         code = st.text_input("Enter the authorization code")
         if st.button("Submit Authorization Code"):
-            logging.debug("Fetching token with provided authorization code")
+            logging.debug("Fetching token using authorization code")
             flow.fetch_token(code=code)
             creds = flow.credentials
+            logging.debug(f"Token fetched successfully: {creds.token}")
             service = build('gmail', 'v1', credentials=creds)
             st.success("Authentication successful!")
-            logging.debug("OAuth authentication successful")
             return service
     except Exception as e:
         st.error(f"OAuth Authentication failed: {e}")
@@ -59,13 +58,13 @@ def authenticate_gmail_with_oauth():
 def fetch_google_alerts(service, query="subject:Google Alert"):
     """
     Fetch Google Alerts emails using Gmail API.
-    Includes debugging messages for tracing issues.
+    Includes detailed debugging for tracing errors.
     """
     try:
-        logging.debug(f"Searching for emails with query: {query}")
+        logging.debug(f"Searching for Gmail messages with query: {query}")
         results = service.users().messages().list(userId='me', q=query).execute()
         messages = results.get('messages', [])
-        logging.debug(f"Found {len(messages)} messages matching query")
+        logging.debug(f"Found {len(messages)} messages matching the query")
 
         email_bodies = []
         for msg in messages:
@@ -75,7 +74,6 @@ def fetch_google_alerts(service, query="subject:Google Alert"):
             email_bodies.append(snippet)
 
         st.success(f"Fetched {len(email_bodies)} Google Alert(s).")
-        logging.debug(f"Fetched {len(email_bodies)} Google Alert(s)")
         return email_bodies
     except Exception as e:
         st.error(f"Failed to fetch Google Alerts: {e}")
@@ -85,12 +83,12 @@ def fetch_google_alerts(service, query="subject:Google Alert"):
 def summarize_alerts_with_openai(alerts):
     """
     Summarize Google Alerts using OpenAI API.
-    Includes debugging messages for tracing issues.
+    Includes detailed debugging for tracing errors.
     """
     try:
-        logging.debug("Combining alerts for summarization")
+        logging.debug("Combining fetched alerts for summarization")
         combined_alerts = "\n".join(alerts)
-        logging.debug("Sending alerts to OpenAI API for summarization")
+        logging.debug("Sending alerts to OpenAI for summarization")
         response = openai.Completion.create(
             engine="text-davinci-003",
             prompt=f"Summarize the following Google Alerts and categorize them:\n\n{combined_alerts}",
