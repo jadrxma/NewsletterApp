@@ -1,21 +1,20 @@
 import streamlit as st
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 import openai
 
-# Set up OpenAI API
-openai.api_key = st.secrets["openai"]["api_key"]
-
-# Gmail API Scopes
+# Define Gmail API Scopes
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+
+# Configure OpenAI API Key from Streamlit secrets
+openai.api_key = st.secrets["openai"]["api_key"]
 
 def authenticate_gmail_with_oauth():
     """
-    Authenticate Gmail API using OAuth.
-    Reads credentials from Streamlit secrets.
+    Authenticate Gmail API using OAuth for deployed Streamlit app.
     """
     try:
-        flow = InstalledAppFlow.from_client_config(
+        flow = Flow.from_client_config(
             {
                 "web": {
                     "client_id": st.secrets["oauth_credentials"]["client_id"],
@@ -25,12 +24,24 @@ def authenticate_gmail_with_oauth():
                     "redirect_uris": [st.secrets["oauth_credentials"]["redirect_uri"]],
                 }
             },
-            SCOPES
+            scopes=SCOPES
         )
-        creds = flow.run_local_server(port=0)
-        service = build('gmail', 'v1', credentials=creds)
-        st.success("Authenticated using OAuth.")
-        return service
+        # Generate an OAuth authorization URL
+        auth_url, _ = flow.authorization_url(prompt='consent')
+        
+        # Display authorization URL to the user
+        st.write("**Step 1: Authenticate Gmail**")
+        st.write(f"Click [here]({auth_url}) to log in and authorize the app.")
+        st.write("After logging in, copy and paste the authorization code below:")
+        
+        # Input field for the authorization code
+        code = st.text_input("Enter the authorization code")
+        if st.button("Submit Authorization Code"):
+            flow.fetch_token(code=code)
+            creds = flow.credentials
+            service = build('gmail', 'v1', credentials=creds)
+            st.success("Authentication successful!")
+            return service
     except Exception as e:
         st.error(f"OAuth Authentication failed: {e}")
         return None
@@ -40,15 +51,17 @@ def fetch_google_alerts(service, query="subject:Google Alert"):
     Fetch Google Alerts emails using Gmail API.
     """
     try:
+        # List emails matching the query
         results = service.users().messages().list(userId='me', q=query).execute()
         messages = results.get('messages', [])
         email_bodies = []
-        
+
+        # Fetch and store email snippets
         for msg in messages:
             message = service.users().messages().get(userId='me', id=msg['id']).execute()
             snippet = message.get('snippet', '')
             email_bodies.append(snippet)
-        
+
         st.success(f"Fetched {len(email_bodies)} Google Alert(s).")
         return email_bodies
     except Exception as e:
@@ -60,6 +73,7 @@ def summarize_alerts_with_openai(alerts):
     Summarize Google Alerts using OpenAI API.
     """
     try:
+        # Combine alerts into a single text
         combined_alerts = "\n".join(alerts)
         response = openai.Completion.create(
             engine="text-davinci-003",
@@ -68,36 +82,30 @@ def summarize_alerts_with_openai(alerts):
             temperature=0.7
         )
         summary = response.choices[0].text.strip()
-        st.success("Summarization completed.")
+        st.success("Summarization completed!")
         return summary
     except Exception as e:
         st.error(f"Failed to summarize alerts: {e}")
         return ""
 
-# Streamlit App UI
+# Streamlit App Layout
 st.title("Google Alerts Summarizer")
 st.write("This app fetches Google Alerts emails and summarizes them using OpenAI.")
 
 # Step 1: Authenticate Gmail API
 st.subheader("Step 1: Authenticate with Gmail")
-service = None
-if st.button("Authenticate"):
-    service = authenticate_gmail_with_oauth()
+service = authenticate_gmail_with_oauth()
 
 # Step 2: Fetch Google Alerts
 if service:
     st.subheader("Step 2: Fetch Google Alerts")
     query = st.text_input("Search Query", value="subject:Google Alert")
-    
+
     if st.button("Fetch Alerts"):
         alerts = fetch_google_alerts(service, query=query)
-        
-        if alerts:
-            st.write("Fetched Alerts:")
-            for alert in alerts:
-                st.write(f"- {alert}")
 
-            # Step 3: Summarize Alerts
+        # Step 3: Summarize Alerts
+        if alerts:
             st.subheader("Step 3: Summarize Alerts")
             if st.button("Summarize"):
                 summary = summarize_alerts_with_openai(alerts)
